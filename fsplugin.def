@@ -1,0 +1,14 @@
+EXPORTS
+	FsGetDefRootName
+	FsInit
+	FsFindFirst
+	FsFindNext
+	FsFindClose
+	FsGetFile
+	FsPutFile
+	FsMkDir
+	FsDeleteFile
+	FsRemoveDir
+	FsRenMovFile
+	FsExecuteFile
+	FsSetDefaultParams
