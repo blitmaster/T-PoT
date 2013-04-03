@@ -1,0 +1,5 @@
+[plugininstall]
+description=iPod Touch/iPhone USB filesystem browser
+type=wfx
+file=T-PoT.wfx
+defaultdir=T-PoT
