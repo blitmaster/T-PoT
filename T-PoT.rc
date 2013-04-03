@@ -164,8 +164,8 @@ LANGUAGE LANG_SPANISH, SUBLANG_SPANISH_MODERN
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,3,0,1
- PRODUCTVERSION 1,3,0,1
+ FILEVERSION 1,3,1,2
+ PRODUCTVERSION 1,3,1,2
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -182,12 +182,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "ACME"
             VALUE "FileDescription", "Total Commander plugin to browse the Apple iPod/iPhone/iPad/AppleTV contents via USB"
-            VALUE "FileVersion", "1.3.0.1"
+            VALUE "FileVersion", "1.3.1.2"
             VALUE "InternalName", "T-PoT"
-            VALUE "LegalCopyright", "Copyright (C) 2012 ACME"
+            VALUE "LegalCopyright", "Copyright (C) 2013 ACME"
             VALUE "OriginalFilename", "T-PoT"
             VALUE "ProductName", "T-PoT"
-            VALUE "ProductVersion", "1.3.0.1"
+            VALUE "ProductVersion", "1.3.1.2"
         END
     END
     BLOCK "VarFileInfo"

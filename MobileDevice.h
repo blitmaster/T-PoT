@@ -60,18 +60,18 @@ extern "C" {
 //#define AMD_IPHONE_SERIAL       ""
 
 /* Services, found in /System/Library/Lockdown/Services.plist */
-#define AMSVC_AFC                   CFSTR("com.apple.afc")
-#define AMSVC_AFC2                  CFSTR("com.apple.afc2")
-#define AMSVC_BACKUP                CFSTR("com.apple.mobilebackup")
-#define AMSVC_CRASH_REPORT_COPY     CFSTR("com.apple.crashreportcopy")
-#define AMSVC_DEBUG_IMAGE_MOUNT     CFSTR("com.apple.mobile.debug_image_mount")
-#define AMSVC_NOTIFICATION_PROXY    CFSTR("com.apple.mobile.notification_proxy")
-#define AMSVC_PURPLE_TEST           CFSTR("com.apple.purpletestr")
-#define AMSVC_SOFTWARE_UPDATE       CFSTR("com.apple.mobile.software_update")
-#define AMSVC_SYNC                  CFSTR("com.apple.mobilesync")
-#define AMSVC_SCREENSHOT            CFSTR("com.apple.screenshotr")
-#define AMSVC_SYSLOG_RELAY          CFSTR("com.apple.syslog_relay")
-#define AMSVC_SYSTEM_PROFILER       CFSTR("com.apple.mobile.system_profiler")
+#define AMSVC_AFC                   CFStringMakeConstantString("com.apple.afc")
+#define AMSVC_AFC2                  CFStringMakeConstantString("com.apple.afc2")
+#define AMSVC_BACKUP                CFStringMakeConstantString("com.apple.mobilebackup")
+#define AMSVC_CRASH_REPORT_COPY     CFStringMakeConstantString("com.apple.crashreportcopy")
+#define AMSVC_DEBUG_IMAGE_MOUNT     CFStringMakeConstantString("com.apple.mobile.debug_image_mount")
+#define AMSVC_NOTIFICATION_PROXY    CFStringMakeConstantString("com.apple.mobile.notification_proxy")
+#define AMSVC_PURPLE_TEST           CFStringMakeConstantString("com.apple.purpletestr")
+#define AMSVC_SOFTWARE_UPDATE       CFStringMakeConstantString("com.apple.mobile.software_update")
+#define AMSVC_SYNC                  CFStringMakeConstantString("com.apple.mobilesync")
+#define AMSVC_SCREENSHOT            CFStringMakeConstantString("com.apple.screenshotr")
+#define AMSVC_SYSLOG_RELAY          CFStringMakeConstantString("com.apple.syslog_relay")
+#define AMSVC_SYSTEM_PROFILER       CFStringMakeConstantString("com.apple.mobile.system_profiler")
 
 typedef unsigned int afc_error_t;
 typedef unsigned int usbmux_error_t;
@@ -712,6 +712,10 @@ typedef enum {
     kCFPropertyListMutableContainers,
     kCFPropertyListMutableContainersAndLeaves
 } CFPropertyListMutabilityOptions; 
+
+typedef CFStringRef (*tf_CFStringMakeConstantString)(
+	const char *data
+);
 
 typedef CFWriteStreamRef (*tf_CFWriteStreamCreateWithFile)(
 	CFAllocatorRef, CFURLRef

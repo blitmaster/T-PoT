@@ -46,19 +46,19 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <zlib.h>
-#include "PngConv.h"
 
-// ----------------------------------------------------------------------------
+#include "mac_png_conv.h"
 
 #define SWAP32(a) ((((a)&0xFF)<<24)|(((a)&0xFF00)<<8)|(((a)&0xFF0000)>>8)|(((a)&0xFF000000)>>24))
+
 #define ASSERT(val,expect,except) { if ((val) != (expect)) throw (except); }
 #define ASSERTNOT(val,expectn,except) { if ((val) == (expectn)) throw (except); }
 
-const uint8 CPngConv::c_pngHeader[8] = {137, 'P', 'N', 'G', 13, 10, 26, 10};
-const uint32 CPngConv::c_pngIHDR = 'RDHI';
-const uint32 CPngConv::c_pngIDAT = 'TADI';
-const uint32 CPngConv::c_pngIEND = 'DNEI';
-const uint32 CPngConv::c_pngCgBl = 'IBgC';
+const uint8 CPngConv::c_pngHeader[8] = { 137, 80, 78, 71, 13, 10, 26, 10 };
+const uint32 CPngConv::c_pngIHDR = 0x52444849;
+const uint32 CPngConv::c_pngIDAT = 0x54414449;
+const uint32 CPngConv::c_pngIEND = 0x444E4549;
+const uint32 CPngConv::c_pngCgBl = 0x49426743;
 
 const char *CPngConv::c_ErrorMessage[] = {
 	"No error",
@@ -81,7 +81,6 @@ CPngConv::CPngConv()
 
 void CPngConv::Init()
 {
-	m_numIDATs = 0;
 	m_chunks = NULL;
 	m_lastChunk = NULL;
 	m_inflatedBuf = NULL;
@@ -96,78 +95,62 @@ int CPngConv::Convert(char *srcFilename, char *dstFilename)
 	uint8 buf[8];
 
 	Init();
+	m_sourceFilename = srcFilename;
+	#if C_MALLOC_DEBUG
+	unlink(C_MALLOC_FILE);
+	#endif
 	try {
-		ASSERTNOT(m_fSrc = fopen(srcFilename, "rb"), NULL, PNGCONV_ERR_STAT_SRC);
-		ASSERT(fread(buf, 1, 8, m_fSrc), 8, PNGCONV_ERR_READ_SRC);
-		ASSERT(memcmp(buf, c_pngHeader, 8), 0, PNGCONV_ERR_NOT_PNG);
+		ASSERTNOT(
+			m_fSrc = fopen(m_sourceFilename, "rb"), 
+			NULL, PNGCONV_ERR_STAT_SRC);
+		ASSERT(
+			fread(buf, 1, 8, m_fSrc), 
+			8, PNGCONV_ERR_READ_SRC);
+		ASSERT(
+			memcmp(buf, c_pngHeader, 8),
+			0, PNGCONV_ERR_NOT_PNG);
 		ReadChunks();
 		ParseChunks();
 		WritePNG(dstFilename);
 		CleanUp();
-	} catch (int errorCode) {
+	}
+	catch(int errorCode) {
 		CleanUp();
-		if (m_fDst)	// If destination file was created, removes it
+		if (m_fDst)
+			// If destination file was created, removes it
 			unlink(dstFilename);
 		return errorCode;
 	}
 	return PNGCONV_ERR_OK;
 }
 
-void *CPngConv::ReadChunk()
-{
-	t_PngChunk *chunk = (t_PngChunk *)malloc(sizeof(t_PngChunk));
+void CPngConv::ReadChunks() {
+	#define FREAD(buf,n) { if (fread(buf, 1, (n), m_fSrc) != (n)) throw PNGCONV_ERR_READ_SRC; }
 
-	ASSERT(fread(&chunk->length, 1, 4, m_fSrc), 4, PNGCONV_ERR_READ_SRC)
-	chunk->length = SWAP32(chunk->length);
-	chunk->data = (uint8 *)malloc(chunk->length);
-	ASSERT(fread(&chunk->name, 1, 4, m_fSrc), 4, PNGCONV_ERR_READ_SRC)
-	ASSERT(fread(chunk->data, 1, chunk->length, m_fSrc), chunk->length, PNGCONV_ERR_READ_SRC)
-	ASSERT(fread(&chunk->crc, 1, 4, m_fSrc), 4, PNGCONV_ERR_READ_SRC)
-	chunk->crc = SWAP32(chunk->crc);
-	chunk->next = NULL;
-
-	return chunk;
-}
-
-void CPngConv::ReadChunks()
-{
 	t_PngChunk *chunk;
-	t_PngChunk *chunkIDAT = NULL;
+
 	while(1) {
-		chunk = (t_PngChunk *) ReadChunk();
-		if (chunk->name == c_pngIDAT) {
-			// Fix for multiple IDAT
-			m_numIDATs++;
-			if (chunkIDAT == NULL) {
-				chunkIDAT = chunk;
-			}
-			else {
-				uint8 *new_data = (uint8 *)malloc(chunkIDAT->length + chunk->length);
-				memcpy(new_data, chunkIDAT->data, chunkIDAT->length);
-				memcpy(new_data + chunkIDAT->length, chunk->data, chunk->length);
-
-				chunkIDAT->length += chunk->length;
-				free(chunkIDAT->data);
-				chunkIDAT->data = new_data;
-				chunkIDAT->crc = -1;
-				
-				free(chunk->data);
-				free(chunk);
-				continue;
-			}
-		}
-
+		chunk = (t_PngChunk *)malloc(sizeof(t_PngChunk));
 		if (m_chunks == NULL)
 			m_chunks = chunk;
 		else
 			m_lastChunk->next = chunk;
 		m_lastChunk = chunk;
+		chunk->next = NULL;
 
+		FREAD(&chunk->length, 4);
+		chunk->length = SWAP32(chunk->length);
+		chunk->data = (uint8 *)malloc(chunk->length);
+		FREAD(&chunk->name, 4);
+		FREAD(chunk->data, chunk->length)
+		FREAD(&chunk->crc, 4);
+		chunk->crc = SWAP32(chunk->crc);
 		if (chunk->name == c_pngIHDR) {
 			// IHDR
 			m_pngIHDR = *(t_PngIHDRChunk*)chunk->data;
 			m_pngIHDR.width = SWAP32(m_pngIHDR.width);
 			m_pngIHDR.height = SWAP32(m_pngIHDR.height);
+			
 			// Estimates the maximum size of the inflated and deflated IDAT:
 			// the 100 term is to prevent overflow in very small images due
 			// to header overhead (never occurred though). Terrible guess.
@@ -182,22 +165,24 @@ void CPngConv::ReadChunks()
 		}
 	}
 
-	if (m_pngIHDR.compression != 0 || m_pngIHDR.bit_depth != 8 || m_pngIHDR.color_type != 6 || m_pngIHDR.filter != 0 || m_pngIHDR.interlace != 0)
+	if (m_pngIHDR.compression != 0 || m_pngIHDR.bit_depth != 8 || m_pngIHDR.color_type != 6 ||
+	    m_pngIHDR.filter != 0 || m_pngIHDR.interlace != 0) {
 	    if (m_containsCgBI)
-				throw PNGCONV_ERR_WRONG_FORMAT;
+			throw PNGCONV_ERR_WRONG_FORMAT;
+	}
 	m_inflatedBuf = (uint8 *)malloc(m_maxInflatedBufSize);
 	m_deflatedBuf = (uint8 *)malloc(m_maxDeflatedBufSize);
 }
 
-void CPngConv::ParseChunks()
-{
+void CPngConv::ParseChunks() {
 	t_PngChunk *chunk = m_chunks;
 	int ret;
 	z_stream infstrm, defstrm;
 
 	// Poke at any IDAT m_chunks and de/recompress them
-	while (chunk) {
+	while(chunk) {
 		if (m_containsCgBI && chunk->name == c_pngIDAT) {
+			
 			infstrm.zalloc = Z_NULL;
 			infstrm.zfree = Z_NULL;
 			infstrm.opaque = Z_NULL;
@@ -205,24 +190,29 @@ void CPngConv::ParseChunks()
 			infstrm.next_in = chunk->data;
 			infstrm.next_out = m_inflatedBuf;
 			infstrm.avail_out = m_maxInflatedBufSize;
+			
 			// Inflate using raw inflation
-			if (inflateInit2(&infstrm,-8) != Z_OK)
-				throw PNGCONV_ERR_ZLIB;
-			ret = inflate(&infstrm, Z_NO_FLUSH);
-			switch (ret) {
-			case Z_NEED_DICT:
-				ret = Z_DATA_ERROR;     // and fall through
-			case Z_DATA_ERROR:
-			case Z_MEM_ERROR:
-				inflateEnd(&infstrm);
+			if (inflateInit2(&infstrm,-8) != Z_OK) {
 				throw PNGCONV_ERR_ZLIB;
 			}
+			ret = inflate(&infstrm, Z_NO_FLUSH);
+			switch (ret) {
+				case Z_NEED_DICT:
+					ret = Z_DATA_ERROR;     /* and fall through */
+				case Z_DATA_ERROR:
+				case Z_MEM_ERROR:
+					inflateEnd(&infstrm);
+					throw PNGCONV_ERR_ZLIB;
+			}
+			
 			ret = inflateEnd(&infstrm);
-			if (infstrm.total_out > m_maxInflatedBufSize)
+			
+			if (infstrm.total_out > m_maxInflatedBufSize) {
 				throw PNGCONV_ERR_INFLATED_OVER;
-			// Swap R and B channels
-			InverseRedBlue(m_inflatedBuf);
+			}
 			// Now deflate again, the regular, PNG-compatible, way
+			InverseRedBlue(m_inflatedBuf);
+			
 			defstrm.zalloc = Z_NULL;
 			defstrm.zfree = Z_NULL;
 			defstrm.opaque = Z_NULL;
@@ -232,8 +222,10 @@ void CPngConv::ParseChunks()
 			defstrm.avail_out = m_maxDeflatedBufSize;
 			deflateInit(&defstrm, Z_DEFAULT_COMPRESSION);
 			ret = deflate(&defstrm, Z_FINISH);
-			if (defstrm.total_out > m_maxDeflatedBufSize)
+
+			if (defstrm.total_out > m_maxDeflatedBufSize) {
 				throw PNGCONV_ERR_DEFLATED_OVER;
+			}
 			if (defstrm.total_out > chunk->length)
 				chunk->data = (uint8 *)realloc(chunk->data, defstrm.total_out);
 			memcpy(chunk->data, m_deflatedBuf, defstrm.total_out);
@@ -260,24 +252,33 @@ void CPngConv::InverseRedBlue(uint8 *buf)
 	}
 }
 
-void CPngConv::WritePNG(char *filename)
-{
+void CPngConv::WritePNG(char *filename) {
 	int tmp;
 	t_PngChunk *chunk = m_chunks;
-
-	ASSERTNOT(m_fDst = fopen(filename, "wb"), NULL, PNGCONV_ERR_WRITE_DST);
-	ASSERT(fwrite(c_pngHeader, 1, 8, m_fDst), 8, PNGCONV_ERR_WRITE_DST);
+	
+	m_fDst = fopen(filename, "wb");
+	ASSERT(
+		fwrite(c_pngHeader, 1, 8, m_fDst),
+		8, PNGCONV_ERR_WRITE_DST);
 	while(chunk) {
 		tmp = SWAP32(chunk->length);
 		chunk->crc = SWAP32(chunk->crc);
 		if (chunk->name != c_pngCgBl) {
 			// Anything but a CgBI
-			ASSERT(fwrite(&tmp, 1, 4, m_fDst), 4, PNGCONV_ERR_WRITE_DST);
-			ASSERT(fwrite(&chunk->name, 1, 4, m_fDst), 4, PNGCONV_ERR_WRITE_DST);
+			ASSERT(
+				fwrite(&tmp, 1, 4, m_fDst),
+				4, PNGCONV_ERR_WRITE_DST);
+			ASSERT(
+				fwrite(&chunk->name, 1, 4, m_fDst),
+				4, PNGCONV_ERR_WRITE_DST);
 			if (chunk->length > 0) {
-				ASSERT(fwrite(chunk->data, 1, chunk->length, m_fDst), chunk->length, PNGCONV_ERR_WRITE_DST);
+				ASSERT(
+					fwrite(chunk->data, 1, chunk->length, m_fDst),
+					chunk->length, PNGCONV_ERR_WRITE_DST);
 			}
-			ASSERT(fwrite(&chunk->crc, 1, 4, m_fDst), 4, PNGCONV_ERR_WRITE_DST);
+			ASSERT(
+				fwrite(&chunk->crc, 1, 4, m_fDst),
+				4, PNGCONV_ERR_WRITE_DST);
 		}
 		chunk = chunk->next;
 	}
@@ -286,6 +287,7 @@ void CPngConv::WritePNG(char *filename)
 unsigned long CPngConv::CheckCRC(uint32 name, uint8 *buf, int len)
 {
 	uint32 crc;
+	
 	crc = crc32(0, (uint8 *)&name, 4);
 	return crc32(crc, buf, len);
 }

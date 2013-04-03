@@ -7,9 +7,11 @@
 
 #pragma warning(disable:4996)
 
+#include "stdafx.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <tchar.h>
-#include <afxwin.h>         // MFC core and standard components
+#include <atlstr.h>			// To use CString
 
 #include "MobileDevice.h"
 
@@ -24,8 +26,12 @@ struct afc_connection *iPodConnection;
 
 // Dll dynamic loading data
 char *piTunesMobileDevicePath = NULL;
-HINSTANCE iTunesDll = NULL;
+char *pCoreFoundationPath = NULL;
 
+HINSTANCE iTunesDll = NULL;
+HINSTANCE CoreFoundationDll = NULL;
+
+tf_CFStringMakeConstantString CFStringMakeConstantString;
 // Dll routines
 tf_AMDeviceNotificationSubscribe	AMDeviceNotificationSubscribe;
 tf_AMDeviceConnect				AMDeviceConnect;
@@ -60,20 +66,44 @@ void init()
 	int pos;
 
 	// Adds iTunesMobileDevice.dll folder to the path, from the registry:
+	if (::RegCreateKey(HKEY_LOCAL_MACHINE, _T("SOFTWARE\\Apple Inc.\\Apple Application Support"), &hSetting) != ERROR_SUCCESS)
+		throw "HKLM\\SOFTWARE\\Apple Inc.\\Apple Application Support not found";
+	if (::RegQueryValueEx(hSetting, _T("InstallDir"), NULL, NULL, NULL, &length) != ERROR_SUCCESS)
+		throw "HKLM\\SOFTWARE\\Apple Inc.\\Apple Application Support\\InstallDir not found";
+	pCoreFoundationPath = new char[length+19+1]; // \CoreFoundation.dll = 19
+	::RegQueryValueEx(hSetting, _T("InstallDir"), NULL, NULL, (LPBYTE)pCoreFoundationPath, &length);
+	::RegCloseKey(hSetting);
+
+	// Adds iTunesMobileDevice.dll folder to the path, from the registry:
 	if (::RegCreateKey(HKEY_LOCAL_MACHINE, _T("SOFTWARE\\Apple Inc.\\Apple Mobile Device Support\\Shared"), &hSetting) != ERROR_SUCCESS)
 		throw "iTunesMobileDevice library not found";
 	if (::RegQueryValueEx(hSetting, _T("iTunesMobileDeviceDLL"), NULL, NULL, NULL, &length) != ERROR_SUCCESS)
 		throw "iTunesMobileDevice library not found";
 	piTunesMobileDevicePath = new char[length+1];
 	::RegQueryValueEx(hSetting, _T("iTunesMobileDeviceDLL"), NULL, NULL, (LPBYTE)piTunesMobileDevicePath, &length);
+	::RegCloseKey(hSetting);
 
 	// Adds the folder to the current system path:	
 	path.GetEnvironmentVariable("PATH");
+
+	path = (path + ";") + pCoreFoundationPath;
 	path = (path + ";") + piTunesMobileDevicePath;
 	pos = path.ReverseFind('\\');
 	if (pos >= 0)
 		path = path.Left(pos);
 	SetEnvironmentVariable("PATH", path);
+
+	if (pCoreFoundationPath[lstrlen(pCoreFoundationPath)-1] != '\\')
+		strcat(pCoreFoundationPath, "\\");
+	strcat(pCoreFoundationPath, "CoreFoundation.dll");
+
+	CoreFoundationDll = LoadLibrary(pCoreFoundationPath);
+	if (CoreFoundationDll) {
+		CFStringMakeConstantString = (tf_CFStringMakeConstantString) GetProcAddress(CoreFoundationDll, "__CFStringMakeConstantString");
+	}
+
+
+	//iTunesDll = LoadLibrary(pCoreFoundationPath);
 
 	// Loads the DLL routines
 	iTunesDll = LoadLibrary(piTunesMobileDevicePath);
@@ -172,6 +202,7 @@ void connect()
 	printf("[RET]AMDeviceStartSession() = %d\n", ret);
 	if (ret)
 		throw "Could not start session";
+
 	iPodAFCName = AMSVC_AFC2;
 	ret = AMDeviceStartService(pDev, iPodAFCName, &iPodAFC, NULL);
 	printf("[RET]AMDeviceStartService() = %d\n", ret);

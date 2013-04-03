@@ -57,6 +57,7 @@ extern "C" {
 // Root name in Total Commander
 #define FSPLUGIN_CAPTION "T-PoT"
 #define FSPLUGIN_VERSION MAKELONG(1, 3)
+#define FSPLUGIN_SUBVERSION MAKELONG(1, 2)
 
 // ids for FsGetFile
 #define FS_FILE_OK 0

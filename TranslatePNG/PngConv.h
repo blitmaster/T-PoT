@@ -89,6 +89,7 @@ class CPngConv {
 
 		unsigned int m_maxInflatedBufSize;
 		unsigned int m_maxDeflatedBufSize;
+		uint32 m_numIDATs;
 		t_PngChunk *m_chunks;
 		t_PngChunk *m_lastChunk;
 		uint8 *m_inflatedBuf;
@@ -102,6 +103,7 @@ class CPngConv {
 
 		void Init();
 		void ReadChunks(void);
+		void *ReadChunk();
 		void ParseChunks(void);
 		void InverseRedBlue(uint8 *buf);
 		void WritePNG(char *);

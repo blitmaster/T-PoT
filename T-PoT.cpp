@@ -108,7 +108,7 @@ int	__stdcall FsInit(int PluginNr, tProgressProc pProgressProc, tLogProc pLogPro
 	while (iPodApi.AttachDLL() != IPOD_ERR_OK) {
 		// Could not attach the DLL
 		int ret = MessageBox(NULL, 
-			"Could not load iTunesMobileDevice.dll, check your iTunes installation.\n", 
+			"Could not load iTunesMobileDevice.dll or CoreFoundation.dll, check your iTunes installation.\n", 
 			"Missing library",
 			MB_RETRYCANCEL);
 		if (ret == IDCANCEL)
@@ -445,7 +445,7 @@ INT_PTR CALLBACK OptionsDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 			return TRUE;
 		case IDC_ABOUT:
 			CString version;
-			version.Format("%s\nVersion %d.%d", FSPLUGIN_CAPTION, LOWORD(FSPLUGIN_VERSION), HIWORD(FSPLUGIN_VERSION));
+			version.Format("%s\nVersion %d.%d.%d.%d", FSPLUGIN_CAPTION, LOWORD(FSPLUGIN_VERSION), HIWORD(FSPLUGIN_VERSION), LOWORD(FSPLUGIN_SUBVERSION), HIWORD(FSPLUGIN_SUBVERSION));
 			MessageBox(hDlg, version, "About", MB_OK | MB_ICONINFORMATION);
 		}
 	}

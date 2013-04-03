@@ -173,6 +173,7 @@ class CiPoTApi {
 		static void NotificationHandler(t_AMDeviceNotificationInfo *info);
 
 	public:
+		static tf_CFStringMakeConstantString				_CFStringMakeConstantString;
 		char m_Serial[64];
 		static t_iPodError AttachDLL();			// Should be called before using any instance
 		static t_iPodError DetachDLL();			// Should be called on program closure

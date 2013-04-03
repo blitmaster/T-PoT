@@ -141,6 +141,8 @@ tf_AFCRemovePath					        CiPoTApi::AFCRemovePath;
 tf_AFCDirectoryCreate				        CiPoTApi::AFCDirectoryCreate;
 tf_AFCRenamePath					        CiPoTApi::AFCRenamePath;
 
+
+tf_CFStringMakeConstantString				CiPoTApi::_CFStringMakeConstantString;
 tf_CFWriteStreamCreateWithFile				CiPoTApi::CFWriteStreamCreateWithFile;
 tf_CFReadStreamCreateWithFile				CiPoTApi::CFReadStreamCreateWithFile;
 tf_CFStringCreateWithCString				CiPoTApi::CFStringCreateWithCString;
@@ -173,14 +175,48 @@ t_iPodError CiPoTApi::AttachDLL()
 	t_AMDeviceNotification *notif; 
 
 	if (m_iPodState == IPOD_STATE_NO_DLL) {
+		if (m_pCoreFoundationPath == NULL) {
+			if (::RegCreateKey(HKEY_LOCAL_MACHINE, _T("SOFTWARE\\Apple Inc.\\Apple Application Support"), &hSetting) != ERROR_SUCCESS)
+			{
+				::RegCloseKey(hSetting);
+				return IPOD_ERR_DLL_NOT_FOUND;
+			}
+			if (::RegQueryValueEx(hSetting, _T("InstallDir"), NULL, NULL, NULL, &length) != ERROR_SUCCESS)
+			{
+				::RegCloseKey(hSetting);
+				return IPOD_ERR_DLL_NOT_FOUND;
+			}
+			m_pCoreFoundationPath = new char[length+19+1]; // \CoreFoundation.dll = 19
+			::RegQueryValueEx(hSetting, _T("InstallDir"), NULL, NULL, (LPBYTE)m_pCoreFoundationPath, &length);
+			::RegCloseKey(hSetting);
+
+
+			// Adds the folder to the current system path:	
+			path.GetEnvironmentVariable("PATH");
+			path = (path + ";") + m_pCoreFoundationPath;
+			SetEnvironmentVariable("PATH", path);
+
+			if (m_pCoreFoundationPath[lstrlen(m_pCoreFoundationPath)-1] != '\\')
+				strcat(m_pCoreFoundationPath, "\\");
+			strcat(m_pCoreFoundationPath, "CoreFoundation.dll");
+		}
+		
 		if (m_piTunesMobileDevicePath == NULL) {
 			// Adds iTunesMobileDevice.dll folder to the path, from the registry:
 			if (::RegCreateKey(HKEY_LOCAL_MACHINE, _T("SOFTWARE\\Apple Inc.\\Apple Mobile Device Support\\Shared"), &hSetting) != ERROR_SUCCESS)
+			{
+				::RegCloseKey(hSetting);
 				return IPOD_ERR_DLL_NOT_FOUND;
+			}
 			if (::RegQueryValueEx(hSetting, _T("iTunesMobileDeviceDLL"), NULL, NULL, NULL, &length) != ERROR_SUCCESS)
+			{
+				::RegCloseKey(hSetting);
 				return IPOD_ERR_DLL_NOT_FOUND;
+			}
 			m_piTunesMobileDevicePath = new char[length+1];
 			::RegQueryValueEx(hSetting, _T("iTunesMobileDeviceDLL"), NULL, NULL, (LPBYTE)m_piTunesMobileDevicePath, &length);
+			::RegCloseKey(hSetting);
+
 			// Adds the folder to the current system path:	
 			path.GetEnvironmentVariable("PATH");
 			path = (path + ";") + m_piTunesMobileDevicePath;
@@ -189,14 +225,9 @@ t_iPodError CiPoTApi::AttachDLL()
 				path.Truncate(pos);
 			SetEnvironmentVariable("PATH", path);
 		}
+
 		// Loads the iTunesMobileDevice DLL routines
 		m_iTunesDll = LoadLibrary(m_piTunesMobileDevicePath);
-		/*if (m_iTunesDll == 0)
-		{
-			DWORD le = GetLastError();
-			MessageBox(GetDesktopWindow(), "error", "error", 0);
-		}*/
-		//m_iTunesDll = LoadLibrary("C:\\Program Files\\Common Files\\Apple\\Mobile Device Support\\bin\\MobileDevice.dll");
 		if (m_iTunesDll) {
 			AMDeviceNotificationSubscribe = (tf_AMDeviceNotificationSubscribe)GetProcAddress(m_iTunesDll, "AMDeviceNotificationSubscribe");
 			AMDeviceConnect = (tf_AMDeviceConnect)GetProcAddress(m_iTunesDll, "AMDeviceConnect");
@@ -223,10 +254,12 @@ t_iPodError CiPoTApi::AttachDLL()
 			AFCRenamePath = (tf_AFCRenamePath)GetProcAddress(m_iTunesDll, "AFCRenamePath");
 		} else
 			return IPOD_ERR_DLL_NOT_FOUND;
+
 		// Loads the CoreFoundation DLL routines
-		m_CoreFoundationDll = LoadLibrary("CoreFoundation.dll");
+		m_CoreFoundationDll = LoadLibrary(m_pCoreFoundationPath);
 		if (m_CoreFoundationDll) {
-           CFWriteStreamCreateWithFile = (tf_CFWriteStreamCreateWithFile)GetProcAddress(m_CoreFoundationDll, "CFWriteStreamCreateWithFile");
+					 _CFStringMakeConstantString = (tf_CFStringMakeConstantString) GetProcAddress(m_CoreFoundationDll, "__CFStringMakeConstantString");
+					 CFWriteStreamCreateWithFile = (tf_CFWriteStreamCreateWithFile)GetProcAddress(m_CoreFoundationDll, "CFWriteStreamCreateWithFile");
            CFReadStreamCreateWithFile = (tf_CFReadStreamCreateWithFile)GetProcAddress(m_CoreFoundationDll, "CFReadStreamCreateWithFile");
            CFStringCreateWithCString = (tf_CFStringCreateWithCString)GetProcAddress(m_CoreFoundationDll, "CFStringCreateWithCString");
            CFURLCreateWithFileSystemPath = (tf_CFURLCreateWithFileSystemPath)GetProcAddress(m_CoreFoundationDll, "CFURLCreateWithFileSystemPath");
@@ -244,7 +277,7 @@ t_iPodError CiPoTApi::AttachDLL()
            CFURLWriteDataAndPropertiesToResource = (tf_CFURLWriteDataAndPropertiesToResource)GetProcAddress(m_CoreFoundationDll, "CFURLWriteDataAndPropertiesToResource");
             bCanTranslatePLIST = true;
 		} else
-			bCanTranslatePLIST = false;
+			return IPOD_ERR_DLL_NOT_FOUND;
 		m_iPodState = IPOD_STATE_UNCONNECTED;
 	}
 	// Registers the static notification call-back method
@@ -301,6 +334,13 @@ void CiPoTApi::NotificationHandler(t_AMDeviceNotificationInfo *info)
 		default:
 			break;
 	}
+}
+
+CFStringRef CFStringMakeConstantString(const char *data)
+{
+	if (CiPoTApi::_CFStringMakeConstantString == NULL)
+		return __CFStringMakeConstantString(data);
+	return CiPoTApi::_CFStringMakeConstantString(data);
 }
 
 // ----------------------------------------------------------------------------
